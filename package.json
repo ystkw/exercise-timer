@@ -1,13 +1,12 @@
 {
-    "name": "exercise-timer",
-    "private": true,
-    "version": "0.0.0",
-    "type": "module",
-    "scripts": {
-      "deploy": "gh-pages -d ."
-    },
-    "devDependencies": {
-      "gh-pages": "^6.1.1"
-    }
+  "name": "exercise-timer",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "upload": "gh-pages -d ."
+  },
+  "devDependencies": {
+    "gh-pages": "^6.3.0"
   }
-  
+}

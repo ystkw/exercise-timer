@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>QRコード管理（タグ・フィルタ付き）</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 text-gray-800 p-6">
+  <div id="app" class="max-w-5xl mx-auto">
+    <h1 class="text-2xl font-bold mb-6">QRコード一覧（タグ・検索・フィルタ対応）</h1>
+
+    <!-- 検索・タグフィルター -->
+    <div class="mb-4 flex flex-wrap items-center gap-2">
+      <input v-model="searchQuery" type="text" placeholder="検索..." class="border rounded px-3 py-1 text-sm w-60">
+      <div class="flex flex-wrap gap-2">
+        <span v-for="tag in uniqueTags" :key="tag" @click="toggleTagFilter(tag)"
+          :class="['px-2 py-1 rounded text-sm cursor-pointer border', tagFilters.includes(tag) ? 'bg-blue-500 text-white' : 'bg-white text-gray-700']">
+          {{ tag }}
+        </span>
+      </div>
+    </div>
+
+    <!-- 入力フォーム -->
+    <div class="mb-8 flex flex-wrap gap-2 items-center">
+      <input v-model="newTitle" type="text" placeholder="タイトル" class="border rounded px-2 py-1 w-40">
+      <input v-model="newData" type="text" placeholder="URLまたはテキスト" class="border rounded px-2 py-1 w-60">
+      <div class="flex items-center gap-1">
+        <input v-model="newTagInput" @keydown.enter.prevent="addTagToNew" type="text" placeholder="タグを追加" class="border rounded px-2 py-1 w-32">
+        <button @click="addTagToNew" class="bg-gray-200 px-2 py-1 rounded text-sm">追加</button>
+      </div>
+      <div class="flex gap-1">
+        <span v-for="(tag, index) in newTags" :key="index" class="bg-blue-100 text-blue-700 px-2 py-1 rounded text-sm">
+          {{ tag }} <button @click="newTags.splice(index, 1)">&times;</button>
+        </span>
+      </div>
+      <button @click="addQr" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-1 rounded">追加</button>
+    </div>
+
+    <!-- QRコード一覧 -->
+    <div class="flex flex-wrap gap-6">
+      <div v-for="(item, index) in filteredQrList" :key="item.id" class="w-52 p-4 bg-white rounded-xl shadow">
+        <div class="text-center font-medium text-sm mb-2">{{ item.title }}</div>
+        <div :id="'qrcode-' + item.id" class="flex justify-center mb-2"></div>
+        <a v-if="isUrl(item.data)" :href="item.data" target="_blank" class="block text-blue-500 text-sm text-center hover:underline mb-2">
+          リンクを開く
+        </a>
+        <div class="flex flex-wrap justify-center gap-1 text-xs mb-2">
+          <span v-for="tag in item.tags" :key="tag" class="bg-gray-200 text-gray-700 px-2 py-0.5 rounded">{{ tag }}</span>
+        </div>
+        <button @click="deleteQr(index)" class="block mx-auto text-red-500 text-sm hover:underline">削除</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <script>
+    const { createApp, nextTick } = Vue;
+
+    createApp({
+      data() {
+        return {
+          qrDataList: [],
+          newTitle: '',
+          newData: '',
+          newTagInput: '',
+          newTags: [],
+          searchQuery: '',
+          tagFilters: []
+        };
+      },
+      computed: {
+        filteredQrList() {
+          return this.qrDataList.filter(item => {
+            const matchesSearch = this.searchQuery === '' ||
+              item.title.includes(this.searchQuery) ||
+              item.data.includes(this.searchQuery) ||
+              item.tags.some(t => t.includes(this.searchQuery));
+            const matchesTags = this.tagFilters.length === 0 ||
+              this.tagFilters.every(tag => item.tags.includes(tag));
+            return matchesSearch && matchesTags;
+          });
+        },
+        uniqueTags() {
+          const tagSet = new Set();
+          this.qrDataList.forEach(item => item.tags.forEach(tag => tagSet.add(tag)));
+          return Array.from(tagSet);
+        }
+      },
+      methods: {
+        isUrl(str) {
+          return str.startsWith('http');
+        },
+        generateQRCodes() {
+          this.qrDataList.forEach((item) => {
+            const el = document.getElementById('qrcode-' + item.id);
+            if (el) {
+              el.innerHTML = '';
+              new QRCode(el, { text: item.data, width: 128, height: 128 });
+            }
+          });
+        },
+        saveToLocalStorage() {
+          localStorage.setItem('qrDataList', JSON.stringify(this.qrDataList));
+        },
+        loadFromLocalStorage() {
+          const stored = localStorage.getItem('qrDataList');
+          if (stored) this.qrDataList = JSON.parse(stored);
+        },
+        addTagToNew() {
+          const tag = this.newTagInput.trim();
+          if (tag && !this.newTags.includes(tag)) this.newTags.push(tag);
+          this.newTagInput = '';
+        },
+        toggleTagFilter(tag) {
+          if (this.tagFilters.includes(tag)) {
+            this.tagFilters = this.tagFilters.filter(t => t !== tag);
+          } else {
+            this.tagFilters.push(tag);
+          }
+        },
+        addQr() {
+          if (!this.newTitle || !this.newData) return;
+          const id = Date.now().toString();
+          this.qrDataList.push({
+            id,
+            title: this.newTitle,
+            data: this.newData,
+            tags: [...this.newTags],
+            createdAt: new Date().toISOString()
+          });
+          this.newTitle = '';
+          this.newData = '';
+          this.newTags = [];
+          this.saveToLocalStorage();
+          nextTick(this.generateQRCodes);
+        },
+        deleteQr(index) {
+          this.qrDataList.splice(index, 1);
+          this.saveToLocalStorage();
+          nextTick(this.generateQRCodes);
+        }
+      },
+      mounted() {
+        this.loadFromLocalStorage();
+        nextTick(this.generateQRCodes);
+      },
+      updated() {
+        nextTick(this.generateQRCodes);
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
